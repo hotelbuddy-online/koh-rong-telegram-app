@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Koh Rong Island - Search</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 16px;
+            color: var(--tg-theme-text-color, #222222);
+            background-color: var(--tg-theme-bg-color, #ffffff);
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.5rem;
+            color: var(--tg-theme-text-color, #222222);
+            margin-bottom: 16px;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border: 1px solid var(--tg-theme-hint-color, #999999);
+            border-radius: 8px;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #222222);
+            font-size: 1rem;
+            box-sizing: border-box;
+            resize: none;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--tg-theme-button-color, #2481cc);
+        }
+        .hint {
+            margin-top: 8px;
+            color: var(--tg-theme-hint-color, #999999);
+            font-size: 0.9rem;
+        }
+        .hints-container {
+            margin-top: 20px;
+        }
+        .hint-chip {
+            display: inline-block;
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #222222);
+            padding: 8px 12px;
+            margin: 4px;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--tg-theme-button-color, #2481cc);
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">What are you looking for?</h1>
+        <textarea id="query-input" placeholder="Describe what you're looking for..."></textarea>
+        <div class="hint">Be specific to get better results</div>
+        
+        <div class="hints-container">
+            <div id="context-hints"></div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <div>Processing your request...</div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+        
+        // Get context from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const context = urlParams.get('context') || '';
+        
+        // Set up the main button
+        tg.MainButton.setText('Search');
+        tg.MainButton.onClick(submitQuery);
+        
+        // Set title and placeholder based on context
+        setupContextUI(context);
+        
+        // When the text area has content, show the main button
+        const queryInput = document.getElementById('query-input');
+        queryInput.addEventListener('input', function() {
+            if (this.value.trim().length > 0) {
+                tg.MainButton.show();
+            } else {
+                tg.MainButton.hide();
+            }
+        });
+        
+        // Initialize: hide the main button until there's input
+        tg.MainButton.hide();
+        
+        function setupContextUI(context) {
+            const titleElement = document.getElementById('title');
+            const hintsContainer = document.getElementById('context-hints');
+            
+            // Clear any existing hints
+            hintsContainer.innerHTML = '';
+            
+            // Set up context-specific UI
+            switch(context) {
+                case 'food':
+                    titleElement.innerText = '🍽️ What food are you looking for?';
+                    queryInput.placeholder = 'E.g., "Spicy seafood near the beach" or "Vegetarian options available"';
+                    
+                    // Add food-specific hint chips
+                    addHintChips([
+                        'Traditional Khmer food',
+                        'Western cuisine',
+                        'Vegetarian options',
+                        'Seafood',
+                        'Restaurant with beach view',
+                        'Quick meals',
+                        'Food delivery'
+                    ]);
+                    break;
+                    
+                case 'hotel':
+                    titleElement.innerText = '🏨 What accommodation do you need?';
+                    queryInput.placeholder = 'E.g., "Beachfront bungalow for 2" or "Budget hostel with AC"';
+                    
+                    addHintChips([
+                        'Beachfront property',
+                        'Family room',
+                        'Budget hostel',
+                        'Luxury villa',
+                        'Pool access',
+                        'Air conditioning',
+                        'Quiet area'
+                    ]);
+                    break;
+                    
+                case 'tour':
+                    titleElement.innerText = '🏝️ What tour are you interested in?';
+                    queryInput.placeholder = 'E.g., "Snorkeling trip to see bioluminescent plankton" or "Jungle trek"';
+                    
+                    addHintChips([
+                        'Snorkeling tour',
+                        'Island hopping',
+                        'Jungle trek',
+                        'Fishing trip',
+                        'Night swimming',
+                        'Village tour',
+                        'Private boat tour'
+                    ]);
+                    break;
+                    
+                case 'transport':
+                    titleElement.innerText = '🚗 Where do you need to go?';
+                    queryInput.placeholder = 'E.g., "Ferry to mainland" or "Taxi to Long Set Beach"';
+                    
+                    addHintChips([
+                        'Ferry to mainland',
+                        'Boat to nearby islands',
+                        'Taxi service',
+                        'Motorbike rental',
+                        'Airport pickup',
+                        'Private boat'
+                    ]);
+                    break;
+                    
+                case 'info':
+                    titleElement.innerText = 'ℹ️ What information do you need?';
+                    queryInput.placeholder = 'E.g., "Best beaches on Koh Rong" or "Where to find ATMs"';
+                    
+                    addHintChips([
+                        'Beach locations',
+                        'Local customs',
+                        'Medical facilities',
+                        'ATM locations',
+                        'Internet availability',
+                        'Weather forecast',
+                        'Local events'
+                    ]);
+                    break;
+                    
+                case 'emergency':
+                    titleElement.innerText = '🚨 Please describe your emergency:';
+                    queryInput.placeholder = 'Describe your emergency situation in detail';
+                    
+                    // No hint chips for emergency
+                    break;
+                    
+                default:
+                    titleElement.innerText = 'What are you looking for?';
+                    queryInput.placeholder = 'Describe what you\'re looking for...';
+            }
+        }
+        
+        function addHintChips(hints) {
+            const hintsContainer = document.getElementById('context-hints');
+            
+            hints.forEach(hint => {
+                const chip = document.createElement('div');
+                chip.className = 'hint-chip';
+                chip.textContent = hint;
+                chip.addEventListener('click', () => {
+                    queryInput.value = hint;
+                    tg.MainButton.show();
+                });
+                hintsContainer.appendChild(chip);
+            });
+        }
+        
+        function submitQuery() {
+            const query = queryInput.value.trim();
+            
+            if (query.length === 0) {
+                return;
+            }
+            
+            // Show loading indicator
+            document.getElementById('loading').style.display = 'block';
+            
+            // Disable main button during processing
+            tg.MainButton.disable();
+            
+            // Prepare data to send back to the Telegram Bot
+            const dataToSend = {
+                context: context,
+                query: query
+            };
+            
+            // Send data back to the Telegram Bot
+            tg.sendData(JSON.stringify(dataToSend));
+            
+            // Close the WebApp after sending
+            // We add a small delay to make sure the data is sent
+            setTimeout(() => {
+                tg.close();
+            }, 100);
+        }
+    </script>
+</body>
+</html>

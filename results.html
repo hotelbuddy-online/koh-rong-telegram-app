@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Koh Rong Island - Results</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 16px;
+            color: var(--tg-theme-text-color, #222222);
+            background-color: var(--tg-theme-bg-color, #ffffff);
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.5rem;
+            color: var(--tg-theme-text-color, #222222);
+            margin-bottom: 16px;
+        }
+        .summary {
+            padding: 12px;
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .results-list {
+            margin-top: 20px;
+        }
+        .result-card {
+            background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .result-card:hover, .result-card:active {
+            background-color: rgba(var(--tg-theme-button-color-rgb, 36, 129, 204), 0.1);
+            transform: translateY(-2px);
+        }
+        .result-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+        .result-type {
+            display: inline-block;
+            font-size: 0.8rem;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-hint-color, #999999);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .result-description {
+            font-size: 0.95rem;
+            color: var(--tg-theme-text-color, #222222);
+            line-height: 1.3;
+        }
+        .result-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+        .result-price {
+            font-weight: bold;
+            color: var(--tg-theme-button-color, #2481cc);
+        }
+        .result-location {
+            display: flex;
+            align-items: center;
+        }
+        .result-location::before {
+            content: "📍";
+            margin-right: 4px;
+        }
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--tg-theme-button-color, #2481cc);
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 16px;
+        }
+        .error-message {
+            display: none;
+            text-align: center;
+            color: #e74c3c;
+            padding: 20px;
+        }
+        .empty-results {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--tg-theme-hint-color, #999999);
+        }
+        .filters {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+            scrollbar-width: none; /* Firefox */
+        }
+        .filters::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Edge */
+        }
+        .filter-chip {
+            flex-shrink: 0;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            border: 1px solid var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-color, #2481cc);
+            padding: 6px 12px;
+            margin-right: 8px;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .filter-chip.active {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Category-specific styles */
+        .icon-food::before { content: "🍽️ "; }
+        .icon-hotel::before { content: "🏨 "; }
+        .icon-tour::before { content: "🏝️ "; }
+        .icon-transport::before { content: "🚗 "; }
+        .icon-info::before { content: "ℹ️ "; }
+        .icon-emergency::before { content: "🚨 "; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="results-title">Found Results</h1>
+        
+        <div id="summary" class="summary" style="display: none;"></div>
+        
+        <div id="filters" class="filters" style="display: none;"></div>
+        
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading results...</div>
+        </div>
+        
+        <div id="error-message" class="error-message">
+            Sorry, we encountered an error while fetching results. Please try again.
+        </div>
+        
+        <div id="empty-results" class="empty-results">
+            No results found. Please try a different search.
+        </div>
+        
+        <div id="results-list" class="results-list"></div>
+    </div>
+
+    <script>
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+        
+        // Configure the Cloud Function URL with the correct project ID
+        const CLOUD_FUNCTION_URL = "https://us-central1-q-dev-e5be2.cloudfunctions.net/get_results";
+        
+        // Get resultsId from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const resultsId = urlParams.get('resultsId');
+        
+        // Maintain a reference to the full results for filtering
+        let allResults = [];
+        let activeFilter = 'all';
+        
+        // Initialize: fetch results as soon as page loads
+        document.addEventListener('DOMContentLoaded', fetchResults);
+        
+        function fetchResults() {
+            // Show loading state
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('results-list').style.display = 'none';
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('empty-results').style.display = 'none';
+            
+            // Construct the API endpoint URL
+            const apiEndpoint = `${CLOUD_FUNCTION_URL}/${resultsId}`;
+            
+            // Fetch the results
+            fetch(apiEndpoint)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch results');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Store the full result set
+                    allResults = data.results || [];
+                    
+                    // Display the summary if available
+                    if (data.summary) {
+                        const summaryElement = document.getElementById('summary');
+                        summaryElement.textContent = data.summary;
+                        summaryElement.style.display = 'block';
+                    }
+                    
+                    // Set up filters if we have results
+                    if (allResults.length > 0) {
+                        setupFilters(allResults);
+                    }
+                    
+                    // Display results
+                    displayResults(allResults);
+                })
+                .catch(error => {
+                    console.error('Error fetching results:', error);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error-message').style.display = 'block';
+                });
+        }
+        
+        function setupFilters(results) {
+            // Get unique result types
+            const types = [...new Set(results.map(result => result.type || 'unknown'))];
+            
+            // Only set up filters if we have multiple types
+            if (types.length <= 1) {
+                return;
+            }
+            
+            const filtersContainer = document.getElementById('filters');
+            
+            // Create "All" filter
+            const allFilter = document.createElement('div');
+            allFilter.className = 'filter-chip active';
+            allFilter.textContent = 'All';
+            allFilter.dataset.filter = 'all';
+            allFilter.addEventListener('click', () => applyFilter('all'));
+            filtersContainer.appendChild(allFilter);
+            
+            // Create filter chips for each type
+            types.forEach(type => {
+                const chip = document.createElement('div');
+                chip.className = 'filter-chip';
+                chip.textContent = formatType(type);
+                chip.dataset.filter = type;
+                chip.addEventListener('click', () => applyFilter(type));
+                filtersContainer.appendChild(chip);
+            });
+            
+            // Show the filters
+            filtersContainer.style.display = 'flex';
+        }
+        
+        function applyFilter(filter) {
+            // Update active filter
+            activeFilter = filter;
+            
+            // Update UI
+            const chips = document.querySelectorAll('.filter-chip');
+            chips.forEach(chip => {
+                if (chip.dataset.filter === filter) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+            
+            // Filter results
+            const filteredResults = filter === 'all' 
+                ? allResults 
+                : allResults.filter(result => result.type === filter);
+            
+            // Display filtered results
+            displayResults(filteredResults);
+        }
+        
+        function displayResults(results) {
+            // Hide loading state
+            document.getElementById('loading').style.display = 'none';
+            
+            const resultsContainer = document.getElementById('results-list');
+            resultsContainer.innerHTML = '';
+            
+            // Update results title
+            document.getElementById('results-title').textContent = `Found ${results.length} Results`;
+            
+            // Check if we have results
+            if (results.length === 0) {
+                document.getElementById('empty-results').style.display = 'block';
+                return;
+            }
+            
+            // Show results container
+            resultsContainer.style.display = 'block';
+            
+            // Create result cards
+            results.forEach(result => {
+                const card = createResultCard(result);
+                resultsContainer.appendChild(card);
+            });
+        }
+        
+        function createResultCard(result) {
+            const card = document.createElement('div');
+            card.className = `result-card ${getContextIconClass(result.type)}`;
+            
+            // Add result ID as data attribute
+            card.dataset.id = result.id;
+            
+            // Create result name
+            const name = document.createElement('div');
+            name.className = 'result-name';
+            name.textContent = result.name || 'Unnamed';
+            card.appendChild(name);
+            
+            // Create result type badge
+            const type = document.createElement('div');
+            type.className = 'result-type';
+            type.textContent = formatType(result.type);
+            card.appendChild(type);
+            
+            // Create description
+            const description = document.createElement('div');
+            description.className = 'result-description';
+            description.textContent = result.description || 'No description available';
+            card.appendChild(description);
+            
+            // Add meta information if available
+            if (result.price || result.location) {
+                const meta = document.createElement('div');
+                meta.className = 'result-meta';
+                
+                if (result.price) {
+                    const price = document.createElement('div');
+                    price.className = 'result-price';
+                    price.textContent = formatPrice(result.price);
+                    meta.appendChild(price);
+                }
+                
+                if (result.location) {
+                    const location = document.createElement('div');
+                    location.className = 'result-location';
+                    location.textContent = result.location;
+                    meta.appendChild(location);
+                }
+                
+                card.appendChild(meta);
+            }
+            
+            // Add click handler
+            card.addEventListener('click', () => {
+                // Send data back to the Telegram Bot
+                tg.sendData(JSON.stringify({
+                    action: 'item_selected',
+                    id: result.id,
+                    context: result.type,
+                    name: result.name
+                }));
+                
+                // Close the WebApp after sending
+                tg.close();
+            });
+            
+            return card;
+        }
+        
+        function formatType(type) {
+            if (!type) return 'Other';
+            
+            // Map raw types to display names
+            const typeMap = {
+                'restaurant': 'Restaurant',
+                'food_item': 'Menu Item',
+                'hotel': 'Accommodation',
+                'property': 'Property',
+                'room': 'Room',
+                'tour': 'Tour',
+                'transport': 'Transport',
+                'info': 'Information',
+                'emergency': 'Emergency'
+            };
+            
+            return typeMap[type] || capitalizeFirstLetter(type);
+        }
+        
+        function formatPrice(price) {
+            if (typeof price === 'number') {
+                return '$' + price.toFixed(2);
+            }
+            return price;
+        }
+        
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+        
+        function getContextIconClass(type) {
+            // Map types to icon classes
+            const iconMap = {
+                'restaurant': 'icon-food',
+                'food_item': 'icon-food',
+                'hotel': 'icon-hotel',
+                'property': 'icon-hotel',
+                'room': 'icon-hotel',
+                'tour': 'icon-tour',
+                'transport': 'icon-transport',
+                'info': 'icon-info',
+                'emergency': 'icon-emergency'
+            };
+            
+            return iconMap[type] || '';
+        }
+    </script>
+</body>
+</html>
